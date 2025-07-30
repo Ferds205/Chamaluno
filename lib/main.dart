@@ -1,14 +1,50 @@
+import 'package:chamada_alunos/alunorepositorio.dart';
+import 'package:chamada_alunos/model/aluno.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(MaterialApp(debugShowCheckedModeBanner: false, home: TelaInicial()));
+  runApp(MyApp());
 }
 
-List<Aluno> alunos = [];
+class MyApp extends StatefulWidget {
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final AlunoRepository alunoRepository = AlunoRepository();
+  bool carregando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    alunoRepository.carregarAlunos().then((_) {
+      setState(() {
+        carregando = false;
+      });
+    });
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    if (carregando) {
+      return MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: TelaInicial(alunoRepository: alunoRepository),
+    );
+  }
+}
+
+final AlunoRepository alunoRepository = AlunoRepository();
 
 class ListaChamada extends StatefulWidget {
-  final List<Aluno> alunos;
-  const ListaChamada({super.key, required this.alunos});
+  final AlunoRepository alunoRepository;
+  const ListaChamada({super.key, required this.alunoRepository});
   @override
   _ListaChamadaState createState() => _ListaChamadaState();
 }
@@ -19,19 +55,19 @@ class _ListaChamadaState extends State<ListaChamada> {
   void initState() {
     super.initState();
 
-    for (var aluno in widget.alunos) {
+    for (var aluno in widget.alunoRepository.getAlunos()) {
       presenca[aluno.nome] = false;
     }
   }
-
+//tela da lista de chamada
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Lista de Chamada')),
       body: ListView.builder(
-        itemCount: widget.alunos.length,
+        itemCount: widget.alunoRepository.getAlunos().length,
         itemBuilder: (context, index) {
-          final aluno = widget.alunos[index];
+          final aluno = widget.alunoRepository.getAlunos()[index];
           return CheckboxListTile(
             title: Text(aluno.nome),
             subtitle: Text('Idade: ${aluno.idade}'),
@@ -48,8 +84,12 @@ class _ListaChamadaState extends State<ListaChamada> {
   }
 }
 
+ //tela de inicio do aplicativo
 class TelaInicial extends StatelessWidget {
-  const TelaInicial({super.key});
+  final AlunoRepository alunoRepository;
+
+ 
+  const TelaInicial({super.key, required this.alunoRepository});
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,7 +103,10 @@ class TelaInicial extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => CadastroAluno()),
+                  MaterialPageRoute(
+                    builder:
+                        (_) => CadastroAluno(alunoRepository: alunoRepository),
+                  ),
                 );
               },
             ),
@@ -74,7 +117,8 @@ class TelaInicial extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ListaChamada(alunos: alunos),
+                    builder:
+                        (_) => ListaChamada(alunoRepository: alunoRepository),
                   ),
                 );
               },
@@ -86,26 +130,9 @@ class TelaInicial extends StatelessWidget {
   }
 }
 
-// Tela principal do app
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: CadastroAluno(), // Tela inicial
-    );
-  }
-}
-
-class Aluno {
-  String nome;
-  String idade;
-  bool presente;
-  Aluno({required this.nome, required this.idade, this.presente = false});
-}
-
 class CadastroAluno extends StatefulWidget {
-  const CadastroAluno({super.key});
+  final AlunoRepository alunoRepository;
+  const CadastroAluno({super.key, required this.alunoRepository});
 
   @override
   _CadastroAlunoState createState() => _CadastroAlunoState();
@@ -123,7 +150,8 @@ class _CadastroAlunoState extends State<CadastroAluno> {
     'vagabundo',
     'idiota',
     'besta',
-    'lucas',
+    'boboca',
+    'cupinxa',
   ];
   bool contemPalavraProibida(String nome) {
     String nomeMin = nome.toLowerCase();
@@ -135,10 +163,11 @@ class _CadastroAlunoState extends State<CadastroAluno> {
     return regex.hasMatch(nome);
   }
 
+    //tela de cadastro de aluno
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Bem Vindo!')),
+      appBar: AppBar(title: Text('Cadastrar Aluno')),
       body: Padding(
         padding: EdgeInsets.all(20),
         child: Column(
@@ -161,58 +190,96 @@ class _CadastroAlunoState extends State<CadastroAluno> {
               },
             ),
             SizedBox(height: 20),
+           ElevatedButton(
+  onPressed: () {
+    final nome = nomeController.text.trim();
+    final idade = idadeController.text.trim();
+
+    // Verificações de campo vazio
+    if (nome.isEmpty || idade.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Preencha todos os campos antes de salvar!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Verificações de idade inválida
+    int? idadeConvertida = int.tryParse(idade);
+    if (idadeConvertida == null || idadeConvertida <= 0 || idadeConvertida >= 130) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Idade inválida.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Verificações de nome
+    if (contemPalavraProibida(nome)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nome contém palavras impróprias >:{'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    // verifica se o nome contém só letras e não outros caractéres
+    if (!nomeValido(nome)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('O nome deve apenas conter letras.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Verificação de nome duplicado
+    if (widget.alunoRepository.nomeDuplicado(nome)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Nome já cadastrado'),
+          content: Text('Este nome já está em uso. Deseja adicionar mesmo assim?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar'),
+            ),
             ElevatedButton(
               onPressed: () {
-                if (nome.trim().isEmpty || idade.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Preencha todos os campos antes de salvar!',
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-                int? idadeConvertida = int.tryParse(idade);
-                if (idadeConvertida == null || idadeConvertida <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Idade inválida.'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-                if (contemPalavraProibida(nome)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Nome contém palavras impróprias >:{'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-                if (!nomeValido(nome)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('O nome deve apenas conter letras. '),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
                 setState(() {
-                  // Atualiza a tela para mostrar os dados
-                  alunos.add(Aluno(nome: nome, idade: idade));
+                  widget.alunoRepository.adicionar(Aluno(nome: nome, idade: idade));
+                  AlunoRepository.salvarAlunos(widget.alunoRepository.getAlunos());
                   nomeController.clear();
                   idadeController.clear();
-                  nome = '';
-                  idade = '';
-                });
+                }); 
+                Navigator.pop(context); // volta para a tela anterior
               },
-              child: Text('Salvar'),
+              child: Text('Sim'),
             ),
+          ],
+        ),
+      );
+      return; // evita seguir o fluxo normal
+    }
+
+    // Se não for duplicado, adiciona direto
+    setState(() {
+      widget.alunoRepository.adicionar(Aluno(nome: nome, idade: idade));
+      AlunoRepository.salvarAlunos(widget.alunoRepository.getAlunos());
+      nomeController.clear();
+      idadeController.clear();
+    });
+    Navigator.pop(context);
+  },
+  child: Text('Salvar'),
+),
             SizedBox(height: 20),
             Text(
               'Alunos cadastrados:',
@@ -220,27 +287,152 @@ class _CadastroAlunoState extends State<CadastroAluno> {
             ),
             SizedBox(height: 10),
             Expanded(
-              child: ListView.builder(
-                itemCount: alunos.length,
-                itemBuilder: (context, index) {
-                  final aluno = alunos[index];
-                  return ListTile(
-                    title: Text(aluno.nome),
-                    subtitle: Text('idade: ${aluno.idade}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(icon: Icon(Icons.edit), onPressed: () {}),
-                        IconButton(icon: Icon(Icons.delete), onPressed: () {}),
-                      ],
-                    ),
-                  );
-                },
-              ),
+              child:
+                  widget.alunoRepository.getAlunos().isEmpty
+                      ? Center(child: Text('Nenhum aluno cadastrado ainda'))
+                      : ListView.builder(
+                        itemCount: widget.alunoRepository.getAlunos().length,
+                        itemBuilder: (context, index) {
+                          final aluno =
+                              widget.alunoRepository.getAlunos()[index];
+                          return ListTile(
+                            title: Text(aluno.nome),
+                            subtitle: Text('idade: ${aluno.idade}'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.edit),
+                                  onPressed: () {
+                                    TextEditingController nomeController =
+                                        TextEditingController(text: aluno.nome);
+                                    TextEditingController idadeController =
+                                        TextEditingController(
+                                          text: aluno.idade,
+                                        );
+
+                                    showDialog(
+                                      context: context,
+                                      builder:
+                                          (context) => AlertDialog(
+                                            title: Text('Editar Aluno'),
+                                            content: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                TextField(
+                                                  controller: nomeController,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Nome',
+                                                  ),
+                                                ),
+                                                TextField(
+                                                  controller: idadeController,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Idade',
+                                                  ),
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                ),
+                                              ],
+                                            ),
+                                            actions: [
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  final nomeEditado = nomeController.text.trim();
+                                                  final idadeEditada = idadeController.text.trim();
+                                                  final novoAluno = Aluno(
+                                                    nome: nomeEditado,
+                                                    idade: idadeEditada,
+                                                  );
+
+                                                  setState(() {
+                                                    widget.alunoRepository
+                                                        .atualizar(
+                                                          aluno,
+                                                          novoAluno,
+                                                        );
+                                                    AlunoRepository.salvarAlunos(
+                                                      widget.alunoRepository
+                                                          .getAlunos(),
+                                                    );
+                                                  });
+
+                                                  Navigator.pop(context);
+                                                },
+                                                child: Text('Salvar'),
+                                              ),
+                                            ],
+                                          ),
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder:
+                                          (context) => AlertDialog(
+                                            title: Text(
+                                              'Deseja excluir mesmo esse aluno?',
+                                            ),
+                                            actions: [
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    widget.alunoRepository
+                                                        .remover(aluno);
+                                                    AlunoRepository.salvarAlunos(
+                                                      widget.alunoRepository
+                                                          .getAlunos(),
+                                                    );
+                                                  });
+                                                  Navigator.pop(context);
+
+                                                  showDialog(
+                                                    context: context,
+                                                    builder:
+                                                        (
+                                                          context,
+                                                        ) => AlertDialog(
+                                                          title: Text(
+                                                            'Aluno excluído!',
+                                                          ),
+                                                          actions: [
+                                                            ElevatedButton(
+                                                              onPressed: () {
+                                                                Navigator.pop(
+                                                                  context,
+                                                                );
+                                                              },
+                                                              child: Text('OK'),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                  );
+                                                },
+                                                child: Text('Sim'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                },
+                                                child: Text('Cancelar'),
+                                              ),
+                                            ],
+                                          ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
             ),
-          ],
-        ),
+      ],
       ),
+    ),
     );
   }
 }
